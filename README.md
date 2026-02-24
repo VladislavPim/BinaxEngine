@@ -73,3 +73,18 @@ The engine uses the following libraries (included in `libs/`):
    ```bash
    git clone https://github.com/YOUR_USERNAME/BinaxEngine.git
    cd BinaxEngine
+
+Build with CMake
+
+mkdir build
+cd build
+cmake ..
+cmake --build . --config Release
+
+Run
+
+./Release/BinaxEngine.exe
+
+📝 License
+This project is licensed under the MIT License - see the LICENSE file for details.
+
