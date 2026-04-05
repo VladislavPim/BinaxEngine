@@ -7,7 +7,7 @@
 [![Status](https://img.shields.io/badge/status-alpha-yellow?style=flat-square)]()
 
 **⚠️ TEST VERSION - EXPERIMENTAL RELEASE ⚠️**  
-This is a test release of BinaxEngine. Everything is work in progress, bugs are expected, and the engine is constantly evolving!
+This is a test release of BinaxEngine. Everything is work in progress, bugs are expected, and the engine is constantly evolving! f
 
 **BinaxEngine** is a lightweight game engine built with C++ and OpenGL, featuring an integrated editor for scene management and game development.
 
