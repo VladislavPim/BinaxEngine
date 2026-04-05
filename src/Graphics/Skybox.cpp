@@ -1,18 +1,22 @@
 #include "Graphics/Skybox.h"
+#include "Graphics/Primitives.h"
 #include <iostream>
-#include <stb_image.h>   // только include, без #define
+#include <stb_image.h>
 
 Skybox::Skybox() {}
 
 Skybox::~Skybox() {
-    if (m_VAO) glDeleteVertexArrays(1, &m_VAO);
-    if (m_VBO) glDeleteBuffers(1, &m_VBO);
     if (m_TextureID) glDeleteTextures(1, &m_TextureID);
 }
 
 bool Skybox::Load(const std::string& right, const std::string& left,
                   const std::string& top, const std::string& bottom,
                   const std::string& front, const std::string& back) {
+    if (m_TextureID) {
+        glDeleteTextures(1, &m_TextureID);
+        m_TextureID = 0;
+    }
+
     glGenTextures(1, &m_TextureID);
     glBindTexture(GL_TEXTURE_CUBE_MAP, m_TextureID);
 
@@ -42,68 +46,16 @@ bool Skybox::Load(const std::string& right, const std::string& left,
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
-    float vertices[] = {
-        -1.0f,  1.0f, -1.0f,
-        -1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,
-         1.0f,  1.0f, -1.0f,
-        -1.0f,  1.0f, -1.0f,
-
-        -1.0f, -1.0f,  1.0f,
-        -1.0f, -1.0f, -1.0f,
-        -1.0f,  1.0f, -1.0f,
-        -1.0f,  1.0f, -1.0f,
-        -1.0f,  1.0f,  1.0f,
-        -1.0f, -1.0f,  1.0f,
-
-         1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,
-
-        -1.0f, -1.0f,  1.0f,
-        -1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f, -1.0f,  1.0f,
-        -1.0f, -1.0f,  1.0f,
-
-        -1.0f,  1.0f, -1.0f,
-         1.0f,  1.0f, -1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-        -1.0f,  1.0f,  1.0f,
-        -1.0f,  1.0f, -1.0f,
-
-        -1.0f, -1.0f, -1.0f,
-        -1.0f, -1.0f,  1.0f,
-         1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,
-        -1.0f, -1.0f,  1.0f,
-         1.0f, -1.0f,  1.0f
-    };
-
-    glGenVertexArrays(1, &m_VAO);
-    glGenBuffers(1, &m_VBO);
-    glBindVertexArray(m_VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glBindVertexArray(0);
-
+    // Создаём сферу (64 сегмента достаточно)
+    m_Mesh = Primitives::CreateSkyboxSphere(64);
     return true;
 }
 
 void Skybox::Draw() const {
+    if (!m_Mesh) return;
     glDepthFunc(GL_LEQUAL);
-    glBindVertexArray(m_VAO);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_CUBE_MAP, m_TextureID);
-    glDrawArrays(GL_TRIANGLES, 0, 36);
-    glBindVertexArray(0);
+    m_Mesh->Draw();
     glDepthFunc(GL_LESS);
 }
