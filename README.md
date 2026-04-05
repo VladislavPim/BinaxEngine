@@ -14,6 +14,7 @@ This release introduces major features: physics, advanced materials, model impor
 **BinaxEngine** is a lightweight game engine built with C++ and OpenGL, featuring an integrated editor for scene management, physics simulation, and real-time rendering.
 
 ---
+(Developed and maintained by a 14-year-old deleloper passionate about low-level systems and graphics)
 
 ## ✨ Features
 
