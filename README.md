@@ -1,4 +1,3 @@
-```markdown
 # 🎮 BinaxEngine - Game Engine (v0.5.0 Beta)
 
 [![CMake](https://img.shields.io/badge/CMake-3.15+-blue?style=flat-square&logo=cmake)](https://cmake.org/)
