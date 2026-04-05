@@ -7,7 +7,7 @@ Camera::Camera(glm::vec3 position)
 }
 
 void Camera::Update(float deltaTime) {
-    // Ìîæíî äîáàâèòü ëîãèêó îáíîâëåíèÿ
+    // ÐœÐ¾Ð¶Ð½Ð¾ Ð´Ð¾Ð±Ð°Ð²Ð¸Ñ‚ÑŒ Ð»Ð¾Ð³Ð¸ÐºÑƒ Ð¾Ð±Ð½Ð¾Ð²Ð»ÐµÐ½Ð¸Ñ
 }
 
 void Camera::ProcessMouseMovement(float xoffset, float yoffset) {
@@ -17,7 +17,7 @@ void Camera::ProcessMouseMovement(float xoffset, float yoffset) {
     m_Yaw += xoffset;
     m_Pitch += yoffset;
 
-    // Îãðàíè÷åíèå óãëà íàêëîíà
+    // ÐžÐ³Ñ€Ð°Ð½Ð¸Ñ‡ÐµÐ½Ð¸Ðµ ÑƒÐ³Ð»Ð° Ð½Ð°ÐºÐ»Ð¾Ð½Ð°
     if (m_Pitch > 89.0f) m_Pitch = 89.0f;
     if (m_Pitch < -89.0f) m_Pitch = -89.0f;
 
@@ -63,14 +63,14 @@ void Camera::MoveDown(float speed) {
 }
 
 void Camera::UpdateCameraVectors() {
-    // Âû÷èñëÿåì íîâûé âåêòîð íàïðàâëåíèÿ
+    // Ð’Ñ‹Ñ‡Ð¸ÑÐ»ÑÐµÐ¼ Ð½Ð¾Ð²Ñ‹Ð¹ Ð²ÐµÐºÑ‚Ð¾Ñ€ Ð½Ð°Ð¿Ñ€Ð°Ð²Ð»ÐµÐ½Ð¸Ñ
     glm::vec3 front;
     front.x = cos(glm::radians(m_Yaw)) * cos(glm::radians(m_Pitch));
     front.y = sin(glm::radians(m_Pitch));
     front.z = sin(glm::radians(m_Yaw)) * cos(glm::radians(m_Pitch));
     m_Front = glm::normalize(front);
 
-    // Ïåðåñ÷èòûâàåì ïðàâûé è âåðõíèé âåêòîðû
+    // ÐŸÐµÑ€ÐµÑÑ‡Ð¸Ñ‚Ñ‹Ð²Ð°ÐµÐ¼ Ð¿Ñ€Ð°Ð²Ñ‹Ð¹ Ð¸ Ð²ÐµÑ€Ñ…Ð½Ð¸Ð¹ Ð²ÐµÐºÑ‚Ð¾Ñ€Ñ‹
     m_Right = glm::normalize(glm::cross(m_Front, m_WorldUp));
     m_Up = glm::normalize(glm::cross(m_Right, m_Front));
 }
