@@ -63,17 +63,27 @@ std::shared_ptr<GameObject> SceneManager::CreateGameObject(const std::string& na
 
 void SceneManager::DeleteGameObject(GameObject* object) {
     if (!object) return;
-    // Сначала удалить детей
+
+    // Если удаляемый объект является выбранным, сбрасываем выделение
+    if (m_SelectedObject.get() == object) {
+        m_SelectedObject.reset();
+    }
+
+    // Если объект имеет родителя, открепляем его
+    if (object->GetParent()) {
+        object->GetParent()->RemoveChild(object);
+    }
+
+    // Рекурсивно удаляем всех детей (они уже будут удалены из списков родителей)
     for (auto& child : object->GetChildren()) {
         DeleteGameObject(child.get());
     }
-    // Потом удалить из списка
-    for (auto it = m_Objects.begin(); it != m_Objects.end(); ++it) {
-        if (it->get() == object) {
-            if (m_SelectedObject.get() == object) m_SelectedObject.reset();
-            m_Objects.erase(it);
-            break;
-        }
+
+    // Удаляем из общего списка
+    auto it = std::find_if(m_Objects.begin(), m_Objects.end(),
+        [object](const std::shared_ptr<GameObject>& ptr) { return ptr.get() == object; });
+    if (it != m_Objects.end()) {
+        m_Objects.erase(it);
     }
 }
 
@@ -268,6 +278,20 @@ void SceneManager::UpdatePhysics(float deltaTime) {
 void SceneManager::SetPhysicsActive(bool active) {
     std::cout << "SceneManager::SetPhysicsActive(" << active << ")" << std::endl;
     PhysicsWorld::GetInstance().SetSimulationActive(active);
+}
+
+std::shared_ptr<GameObject> SceneManager::FindGameObjectByPtr(GameObject* ptr) {
+    for (auto& obj : m_Objects) {
+        if (obj.get() == ptr) return obj;
+    }
+    return nullptr;
+}
+
+std::shared_ptr<GameObject> SceneManager::GetActiveFog() const {
+    for (const auto& obj : m_Objects) {
+        if (obj->IsFog()) return obj;
+    }
+    return nullptr;
 }
 
 void SceneManager::ResetPhysics() {
