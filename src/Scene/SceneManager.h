@@ -6,6 +6,14 @@
 #include "GameObject.h"
 #include "Graphics/Shader.h"
 
+// ===== ТИПЫ ТУМАНА (глобально, чтобы использовать без SceneManager::) =====
+enum FogType {
+    FOG_NONE = 0,
+    FOG_LINEAR,
+    FOG_EXP,
+    FOG_EXP_SQUARED
+};
+
 class SceneManager {
 public:
     SceneManager();
@@ -49,6 +57,23 @@ public:
     void ResetPhysics();
     void RegisterForPhysicsReset(GameObject* obj);
 
+    // Поиск shared_ptr по сырому указателю
+    std::shared_ptr<GameObject> FindGameObjectByPtr(GameObject* ptr);
+
+    // ===== НАСТРОЙКИ ТУМАНА =====
+    struct FogSettings {
+        bool enabled = false;
+        int type = FOG_LINEAR;           // теперь FOG_LINEAR доступен глобально
+        glm::vec3 color = glm::vec3(0.5f, 0.6f, 0.7f);
+        float density = 0.04f;
+        float linearStart = 10.0f;
+        float linearEnd = 50.0f;
+    };
+    FogSettings& GetFogSettings() { return m_Fog; }
+
+    // В public секцию
+    std::shared_ptr<GameObject> GetActiveFog() const;
+
 private:
     bool m_Initialized;
     std::vector<std::shared_ptr<GameObject>> m_Objects;
@@ -56,4 +81,5 @@ private:
     std::shared_ptr<GameObject> m_ActiveCamera;
     float m_CameraYaw = -90.0f;
     float m_CameraPitch = 0.0f;
+    FogSettings m_Fog;
 };
