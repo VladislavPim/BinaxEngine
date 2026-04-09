@@ -398,7 +398,7 @@ void EditorUI::DrawHierarchy() {
         if (m_SceneManager) {
             int id = 0;
             for (const auto& obj : m_SceneManager->GetObjects()) {
-                if (obj->GetParent() == nullptr) {
+                if (obj->GetParent() == nullptr) {  // только корни
                     DrawObjectTreeNode(obj, id);
                 }
             }
@@ -455,6 +455,14 @@ if (ImGui::MenuItem("Spot Light")) {
     }
 }
 
+if (ImGui::MenuItem("Base Fog")) {
+    auto fog = m_SceneManager->CreateGameObject("Base Fog");
+    fog->SetIsFog(true);
+    fog->SetFogEnabled(false);   // по умолчанию выключен
+    fog->SetColor(glm::vec3(0.5f, 0.6f, 0.7f)); // цвет для иконки в иерархии
+    // Не даём меш, чтобы не было визуального представления (только компонент)
+}
+
 if (ImGui::MenuItem("Camera")) {
     auto camera = m_SceneManager->CreateGameObject("Camera");
     camera->SetIsCamera(true);
@@ -471,15 +479,11 @@ if (ImGui::MenuItem("Cube")) {
     auto cube = m_SceneManager->CreateGameObject("Cube");
     cube->SetMesh(Primitives::CreateCube());
     cube->SetColor(glm::vec3(0.8f, 0.3f, 0.2f));
-    cube->SetColliderType(COLLIDER_BOX);   // важно!
-    cube->SaveInitialTransform();
 }
 if (ImGui::MenuItem("Sphere")) {
     auto sphere = m_SceneManager->CreateGameObject("Sphere");
     sphere->SetMesh(Primitives::CreateSphere());
     sphere->SetColor(glm::vec3(0.3f, 0.8f, 0.2f));
-    sphere->SetColliderType(COLLIDER_SPHERE);
-    sphere->SaveInitialTransform();
 }
     ImGui::EndPopup();
 }
@@ -489,20 +493,66 @@ if (ImGui::MenuItem("Sphere")) {
 }
 
 void EditorUI::DrawObjectTreeNode(std::shared_ptr<GameObject> obj, int& id) {
+    if (!obj->GetChildren().empty()) {
+    std::cout << "DEBUG: Отрисовка " << obj->GetName() 
+              << " с детьми: " << obj->GetChildren().size() << std::endl;
+}
     ImGui::PushID(id++);
     bool isSelected = (obj == m_SceneManager->GetSelectedObject());
+
     const char* icon = "[]";
     if (obj->GetName().find("Light") != std::string::npos) icon = "[L]";
-    else if (obj->GetName().find("Grid") != std::string::npos) icon = "[G]";
+    else if (obj->GetName().find("Camera") != std::string::npos) icon = "[C]";
+    else if (obj->IsFog()) icon = "[F]";
 
-    ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick;
-    if (isSelected) nodeFlags |= ImGuiTreeNodeFlags_Selected;
-    if (obj->GetChildren().empty()) nodeFlags |= ImGuiTreeNodeFlags_Leaf;
+    // Убираем все флаги, кроме базовых. Стрелка будет у всех, но это не страшно.
+ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick;
+if (isSelected) nodeFlags |= ImGuiTreeNodeFlags_Selected;
+if (obj->GetChildren().empty()) {
+    nodeFlags |= ImGuiTreeNodeFlags_Leaf;   // нет детей → нет стрелки
+}
 
     bool nodeOpen = ImGui::TreeNodeEx((std::string(icon) + " " + obj->GetName()).c_str(), nodeFlags);
+
     if (ImGui::IsItemClicked()) {
         m_SceneManager->SetSelectedObject(obj);
     }
+
+    else if (obj->IsFog()) icon = "[F]";
+
+    // Drag & Drop — перетаскивание объекта
+    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoDisableHover)) {
+        ImGui::SetDragDropPayload("GAME_OBJECT", obj.get(), sizeof(GameObject*));
+        ImGui::Text("%s", obj->GetName().c_str());
+        ImGui::EndDragDropSource();
+    }
+
+    // Drag & Drop — принятие объекта (сделать ребёнком)
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("GAME_OBJECT")) {
+            GameObject* droppedObj = *(GameObject**)payload->Data;
+            if (droppedObj && droppedObj != obj.get()) {
+                // Защита от циклов
+                bool isDescendant = false;
+                GameObject* parent = obj->GetParent();
+                while (parent) {
+                    if (parent == droppedObj) { isDescendant = true; break; }
+                    parent = parent->GetParent();
+                }
+                if (!isDescendant) {
+                    for (auto& candidate : m_SceneManager->GetObjects()) {
+                        if (candidate.get() == droppedObj) {
+                            candidate->SetParent(obj, true);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+
+    // Контекстное меню
     if (ImGui::BeginPopupContextItem()) {
         if (ImGui::MenuItem("Duplicate", "Ctrl+D")) {
             m_SceneManager->DuplicateSelectedObject();
@@ -510,15 +560,29 @@ void EditorUI::DrawObjectTreeNode(std::shared_ptr<GameObject> obj, int& id) {
         if (ImGui::MenuItem("Delete", "Del")) {
             m_SceneManager->DeleteGameObject(obj.get());
         }
+        ImGui::Separator();
+        if (obj->GetParent() != nullptr) {
+            if (ImGui::MenuItem("Make Root")) {
+                obj->Unparent();
+            }
+        }
+        if (ImGui::MenuItem("Make child of selected")) {
+            auto selected = m_SceneManager->GetSelectedObject();
+            if (selected && selected != obj) {
+                obj->SetParent(selected, true);
+            }
+        }
         ImGui::EndPopup();
     }
 
+    // Рисуем детей, если узел открыт
     if (nodeOpen) {
         for (const auto& child : obj->GetChildren()) {
             DrawObjectTreeNode(child, id);
         }
         ImGui::TreePop();
     }
+
     ImGui::PopID();
 }
 
@@ -603,6 +667,35 @@ void EditorUI::DrawInspector() {
                     }
                 }
 
+                if (selected->IsFog()) {
+    if (ImGui::CollapsingHeader("Fog Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+        bool enabled = selected->GetFogEnabled();
+if (ImGui::Checkbox("Enable Fog", &enabled)) {
+    selected->SetFogEnabled(enabled);
+}
+        if (enabled) {
+            const char* fogTypes[] = { "Linear", "Exponential", "Exponential Squared" };
+            int currentType = selected->GetFogType() - 1;
+            if (ImGui::Combo("Type", &currentType, fogTypes, 3)) {
+                selected->SetFogType(currentType + 1);
+            }
+            glm::vec3 color = selected->GetFogColor();
+            if (ImGui::ColorEdit3("Color", glm::value_ptr(color))) {
+                selected->SetFogColor(color);
+            }
+            if (selected->GetFogType() == 1) { // Linear
+                float start = selected->GetFogLinearStart();
+                float end = selected->GetFogLinearEnd();
+                if (ImGui::DragFloat("Start", &start, 0.5f, 0.0f, 200.0f)) selected->SetFogLinearStart(start);
+                if (ImGui::DragFloat("End", &end, 0.5f, 0.0f, 500.0f)) selected->SetFogLinearEnd(end);
+            } else { // Exponential or Exponential Squared
+                float density = selected->GetFogDensity();
+                if (ImGui::DragFloat("Density", &density, 0.002f, 0.0f, 0.5f)) selected->SetFogDensity(density);
+            }
+        }
+    }
+}
+
                 // Секция материала
                 if (ImGui::CollapsingHeader("Material", ImGuiTreeNodeFlags_DefaultOpen)) {
                     auto material = selected->GetMaterial();
@@ -645,64 +738,46 @@ void EditorUI::DrawInspector() {
                     bool receive = selected->ReceiveShadows();
                     if (ImGui::Checkbox("Cast Shadows", &cast)) selected->SetCastShadows(cast);
                     if (ImGui::Checkbox("Receive Shadows", &receive)) selected->SetReceiveShadows(receive);
-                }
 
-                // Physics Components
-                if (ImGui::CollapsingHeader("Physics Components", ImGuiTreeNodeFlags_DefaultOpen)) {
-                    // RigidBody
-                    if (!selected->HasRigidBody()) {
-                        if (ImGui::Button("Add RigidBody")) {
-                            selected->AddRigidBody(1.0f);
-                            selected->SaveInitialTransform();
-                            m_SceneManager->RegisterForPhysicsReset(selected.get());
-                        }
+                    // ===== Components =====
+if (ImGui::CollapsingHeader("Components", ImGuiTreeNodeFlags_DefaultOpen)) {
+    bool canAddComponents = !selected->IsCamera() && selected->GetLightType() == LT_NONE;
+    if (!canAddComponents) {
+        ImGui::TextDisabled("Components not available for lights or cameras");
+    } else {
+        bool hasPhysics = selected->HasRigidBody() || selected->GetColliderType() != COLLIDER_NONE;
+        if (hasPhysics) {
+            DrawPhysicsComponents(selected);
+            if (ImGui::Button("Remove Physics")) {
+                selected->RemoveRigidBody();
+                selected->SetColliderType(COLLIDER_NONE);
+            }
+        } else {
+            if (ImGui::Button("Add Component")) {
+                ImGui::OpenPopup("add_component_popup");
+            }
+            if (ImGui::BeginPopup("add_component_popup")) {
+                if (ImGui::MenuItem("Physics")) {
+                    if (selected->CanHavePhysics()) {
+                        selected->SetColliderType(COLLIDER_BOX);
+                        selected->AddRigidBody(1.0f);
+                        selected->SaveInitialTransform();
+                        PhysicsWorld::GetInstance().RegisterGameObject(selected.get());
                     } else {
-                        ImGui::Text("RigidBody (mass = %.1f)", selected->GetMass());
-                        if (ImGui::Button("Remove RigidBody"))
-                            selected->RemoveRigidBody();
-
-                        float mass = selected->GetMass();
-                        if (ImGui::DragFloat("Mass", &mass, 0.1f, 0.0f, 100.0f)) {
-                            selected->SetMass(mass);
-                            selected->RemoveRigidBody();
-                            selected->AddRigidBody(mass);
-                        }
-
-                        ImGui::Separator();
-                        ImGui::Text("Material Properties");
-                        float friction = selected->GetFriction();
-                        if (ImGui::SliderFloat("Friction", &friction, 0.0f, 1.0f))
-                            selected->SetFriction(friction);
-                        float restitution = selected->GetRestitution();
-                        if (ImGui::SliderFloat("Restitution", &restitution, 0.0f, 1.0f))
-                            selected->SetRestitution(restitution);
-                        float rollingFriction = selected->GetRollingFriction();
-                        if (ImGui::SliderFloat("Rolling Friction", &rollingFriction, 0.0f, 1.0f))
-                            selected->SetRollingFriction(rollingFriction);
-
-                        ImGui::Separator();
-                        ImGui::Text("Damping");
-                        float linearDamping = selected->GetLinearDamping();
-                        if (ImGui::SliderFloat("Linear Damping", &linearDamping, 0.0f, 1.0f))
-                            selected->SetLinearDamping(linearDamping);
-                        float angularDamping = selected->GetAngularDamping();
-                        if (ImGui::SliderFloat("Angular Damping", &angularDamping, 0.0f, 1.0f))
-                            selected->SetAngularDamping(angularDamping);
+                        ImGui::OpenPopup("physics_error");
                     }
-
-                    ImGui::Separator();
-                    ImGui::Text("Collider");
-                    int currentCollider = (int)selected->GetColliderType();
-                    const char* colliderItems[] = { "None", "Box", "Sphere", "Capsule" };
-                    if (ImGui::Combo("Type", &currentCollider, colliderItems, 4)) {
-                        selected->SetColliderType((ColliderType)currentCollider);
-                        if (selected->HasRigidBody()) {
-                            float mass = selected->GetMass();
-                            selected->RemoveRigidBody();
-                            selected->AddRigidBody(mass);
-                        }
-                    }
-                } // конец Physics Components
+                }
+                ImGui::EndPopup();
+            }
+            if (ImGui::BeginPopupModal("physics_error", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                ImGui::Text("Cannot add physics to object with parent or children!");
+                if (ImGui::Button("OK")) ImGui::CloseCurrentPopup();
+                ImGui::EndPopup();
+            }
+        }
+    }
+}
+                }
             } // конец else (не-камера)
         } // конец if (selected)
     } // конец if (ImGui::Begin)
@@ -876,14 +951,14 @@ void EditorUI::DrawSceneView() {
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0,0,0,0));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
 
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove; // <- NoMove фиксирует окно
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove;
     if (ImGui::Begin("Scene View", nullptr, flags)) {
         m_ViewportPos = ImGui::GetCursorScreenPos();
         m_ViewportSize = ImGui::GetContentRegionAvail();
         m_ViewportHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
         m_ViewportFocused = ImGui::IsWindowFocused();
 
-        m_GizmoActive = false; // сбрасываем флаг
+        m_GizmoActive = false;
 
         auto selected = GetSelectedObject();
         if (selected && m_Settings.show_gizmo && m_ViewportHovered) {
@@ -905,27 +980,31 @@ void EditorUI::DrawSceneView() {
                                      m_CurrentGizmoOperation, m_CurrentGizmoMode,
                                      glm::value_ptr(transform), nullptr, m_Settings.useSnap ? snap : nullptr))
             {
-                // Если манипуляция произошла, обновляем объект
+                glm::mat4 finalMatrix = transform;
+                if (selected->GetParent()) {
+                    glm::mat4 parentWorld = selected->GetParent()->GetTransformMatrix();
+                    finalMatrix = glm::inverse(parentWorld) * transform;
+                }
                 glm::vec3 scale, pos, skew;
                 glm::quat rot;
                 glm::vec4 persp;
-                glm::decompose(transform, scale, rot, pos, skew, persp);
+                glm::decompose(finalMatrix, scale, rot, pos, skew, persp);
                 selected->SetPosition(pos);
                 selected->SetRotation(glm::degrees(glm::eulerAngles(rot)));
                 selected->SetScale(scale);
-                m_GizmoActive = true; // гизмо был использован в этом кадре
-            } else if (ImGuizmo::IsUsing()) {
-                // Если гизмо активен (пользователь тянет, но изменений матрицы не было)
                 m_GizmoActive = true;
             }
-        }
+            else if (ImGuizmo::IsUsing()) {
+                m_GizmoActive = true;
+            }
+        } // <-- закрываем if (selected && ...)
 
         // Текст в углу...
         ImGui::SetCursorPos(ImVec2(10,10));
         ImGui::TextColored(ImVec4(1,1,1,0.7f), "Scene View");
         ImGui::SetCursorPos(ImVec2(10,30));
         ImGui::TextColored(ImVec4(1,1,1,0.5f), "%.0fx%.0f", m_ViewportSize.x, m_ViewportSize.y);
-    }
+    } // <-- закрываем if (ImGui::Begin(...))
     ImGui::End();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor();
@@ -1154,6 +1233,74 @@ std::string EditorUI::OpenFileDialog(const char* filter) {
         return std::string(filename);
     }
     return "";
+}
+
+void EditorUI::DrawPhysicsComponents(std::shared_ptr<GameObject> selected) {
+    ImGui::Text("Physics Components");
+    ImGui::Separator();
+
+    // RigidBody
+    if (!selected->HasRigidBody()) {
+        if (ImGui::Button("Add RigidBody")) {
+            selected->AddRigidBody(1.0f);
+            selected->SaveInitialTransform();
+            PhysicsWorld::GetInstance().RegisterGameObject(selected.get());
+        }
+    } else {
+        ImGui::Text("RigidBody (mass = %.1f)", selected->GetMass());
+        if (ImGui::Button("Remove RigidBody"))
+            selected->RemoveRigidBody();
+
+        float mass = selected->GetMass();
+        if (ImGui::DragFloat("Mass", &mass, 0.1f, 0.0f, 100.0f)) {
+            selected->SetMass(mass);
+            selected->RemoveRigidBody();
+            selected->AddRigidBody(mass);
+        }
+
+        ImGui::Separator();
+        ImGui::Text("Material Properties");
+        float friction = selected->GetFriction();
+        if (ImGui::SliderFloat("Friction", &friction, 0.0f, 1.0f))
+            selected->SetFriction(friction);
+        float restitution = selected->GetRestitution();
+        if (ImGui::SliderFloat("Restitution", &restitution, 0.0f, 1.0f))
+            selected->SetRestitution(restitution);
+        float rollingFriction = selected->GetRollingFriction();
+        if (ImGui::SliderFloat("Rolling Friction", &rollingFriction, 0.0f, 1.0f))
+            selected->SetRollingFriction(rollingFriction);
+
+        ImGui::Separator();
+        ImGui::Text("Damping");
+        float linearDamping = selected->GetLinearDamping();
+        if (ImGui::SliderFloat("Linear Damping", &linearDamping, 0.0f, 1.0f))
+            selected->SetLinearDamping(linearDamping);
+        float angularDamping = selected->GetAngularDamping();
+        if (ImGui::SliderFloat("Angular Damping", &angularDamping, 0.0f, 1.0f))
+            selected->SetAngularDamping(angularDamping);
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Collider");
+    int currentCollider = (int)selected->GetColliderType();
+    const char* colliderItems[] = { "None", "Box", "Sphere", "Capsule" };
+    if (ImGui::Combo("Type", &currentCollider, colliderItems, 4)) {
+        if (currentCollider != COLLIDER_NONE && !selected->CanHavePhysics()) {
+            ImGui::OpenPopup("collider_error");
+        } else {
+            selected->SetColliderType((ColliderType)currentCollider);
+            if (selected->HasRigidBody()) {
+                float mass = selected->GetMass();
+                selected->RemoveRigidBody();
+                selected->AddRigidBody(mass);
+            }
+        }
+    }
+    if (ImGui::BeginPopupModal("collider_error", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Cannot add collider to object with parent/children!");
+        if (ImGui::Button("OK")) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
 }
 
 void EditorUI::LoadEditorSettings() {
