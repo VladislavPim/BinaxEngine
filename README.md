@@ -96,13 +96,7 @@ This release introduces major features: physics, advanced materials, model impor
 - **Normal mapping** – adjustable strength
 - **Grid** – beautiful white grid with distance fade
 - **Performance optimizations** – reduced memory footprint
-
----
-
-## 🖼️ Screenshots
-
-*(Add screenshots of the editor, physics simulation, material editor, model import, etc.)*
-
+- 
 ---
 
 ## 📥 Installation & Build
