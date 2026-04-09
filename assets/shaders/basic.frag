@@ -41,6 +41,13 @@ uniform float emissionIntensity;
 // === AMBIENT ===
 uniform float ambientStrength;
 
+uniform bool fogEnabled;
+uniform int fogType;      // 0 = нет, 1 = linear, 2 = exp, 3 = exp2
+uniform vec3 fogColor;
+uniform float fogDensity;
+uniform float fogStart;
+uniform float fogEnd;
+
 // === СТРУКТУРА СВЕТА ===
 struct Light {
     int type;          // 0 = directional, 1 = point, 2 = spot
@@ -183,6 +190,32 @@ void main() {
 
         result += (1.0 - shadow) * attenuation * (diffuse + specular);
     }
+
+    // === ТУМАН ===
+if (fogEnabled) {
+    float dist = length(viewPos - FragPos);
+    float fogFactor = 0.0;
+    
+    if (fogType == 1) { // Linear
+        fogFactor = (dist - fogStart) / (fogEnd - fogStart);
+        fogFactor = clamp(fogFactor, 0.0, 1.0);
+    } 
+    else if (fogType == 2) { // Exponential
+        fogFactor = 1.0 - exp(-fogDensity * dist);
+    } 
+    else if (fogType == 3) { // Exponential Squared (самый красивый)
+        fogFactor = 1.0 - exp(-pow(fogDensity * dist, 2.0));
+    }
+    
+    // Плавное смешивание с сохранением контраста
+    result = mix(result, fogColor, fogFactor);
+    
+    // Дополнительно: уменьшаем насыщенность дальних объектов (эффект глубины)
+    if (fogFactor > 0.3) {
+        float desat = mix(1.0, 0.5, (fogFactor - 0.3) / 0.7);
+        result = vec3(desat) * result + (1.0 - desat) * fogColor;
+    }
+}
 
     result += emissionColor * emissionIntensity;
     FragColor = vec4(result, 1.0);
